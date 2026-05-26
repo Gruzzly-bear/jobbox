@@ -7,16 +7,46 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_
 export default function Home() {
   const [loading, setLoading] = useState<string | null>(null);
   const [docs, setDocs] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
+  const [email, setEmail] = useState('');
+  const [authChecking, setAuthChecking] = useState(true);
 
+  // Check auth status on load
   useEffect(() => {
+    sb.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user || null);
+      setAuthChecking(false);
+    });
+
+    // Listen for auth changes (like when they click the magic link)
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch docs once user is loaded
+  useEffect(() => {
+    if (!user) return;
     const fetchDocs = async () => {
-      const { data: { user } } = await sb.auth.getUser();
-      if (!user) return;
       const { data } = await sb.from('documents').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
       if (data) setDocs(data);
     };
     fetchDocs();
-  }, []);
+  }, [user]);
+
+  const handleMagicLink = async () => {
+    if (!email) return alert('Enter an email first.');
+    const { error } = await sb.auth.signInWithOtp({ email });
+    if (error) alert(error.message);
+    else alert('Login link sent. Check your inbox.');
+  };
+
+  const handleLogout = async () => {
+    await sb.auth.signOut();
+    setUser(null);
+  };
 
   const upload = async (tag: string) => {
     const input = document.createElement('input');
@@ -27,13 +57,18 @@ export default function Home() {
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
-      const { data: { user } } = await sb.auth.getUser();
       if (!user) return;
 
       setLoading(tag);
       const filePath = `${user.id}/${Date.now()}_${file.name}`;
-      const { data } = await sb.storage.from('docs').upload(filePath, file);
+      const { data, error } = await sb.storage.from('docs').upload(filePath, file);
       
+      if (error) {
+        alert(`Upload failed: ${error.message}`);
+        setLoading(null);
+        return;
+      }
+
       if (data) {
         await sb.from('documents').insert({ file_path: data.path, tag, user_id: user.id });
         setDocs((prev) => [{ created_at: new Date(), tag }, ...prev]);
@@ -43,43 +78,108 @@ export default function Home() {
     input.click();
   };
 
+  if (authChecking) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans text-slate-400 font-bold tracking-widest">LOADING...</div>;
+  }
+
+  // GATEKEEPER UI
+  if (!user) {
+    return (
+      <main className="min-h-screen bg-slate-900 p-6 flex flex-col justify-center items-center font-sans selection:bg-blue-500 selection:text-white">
+        <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-2xl border-t-8 border-blue-600 text-center transform transition-all">
+          <h1 className="text-3xl font-black text-slate-900 tracking-tighter mb-1">JOBBOX</h1>
+          <p className="text-sm text-slate-500 font-medium mb-8">Secure Field Access</p>
+          
+          <div className="text-left mb-6">
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Work Email</label>
+            <input 
+              type="email" 
+              placeholder="name@company.com" 
+              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all font-medium text-slate-900"
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleMagicLink()}
+            />
+          </div>
+          
+          <button 
+            onClick={handleMagicLink} 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black tracking-wide shadow-lg shadow-blue-600/30 active:scale-95 transition-all"
+          >
+            SEND LOGIN LINK
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // MAIN DASHBOARD UI
   return (
-    <main className="min-h-screen bg-[#F9FAFB] p-6 font-sans">
-      <div className="w-full max-w-sm mx-auto">
-        <header className="mb-10 pt-4">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">JobBox</h1>
-          <p className="text-sm text-gray-500 font-medium">Professional Field Documentation</p>
-        </header>
-        
-        <div className="grid gap-3 mb-10">
-          <ActionButton label="Warranty" tag="warranty" onClick={upload} loading={loading} />
-          <ActionButton label="Permit" tag="permit" onClick={upload} loading={loading} />
-          <ActionButton label="Invoice" tag="invoice" onClick={upload} loading={loading} />
+    <main className="min-h-screen bg-slate-100 font-sans selection:bg-blue-500 selection:text-white pb-12">
+      {/* Dark Header */}
+      <header className="bg-slate-900 text-white px-6 pt-12 pb-8 shadow-md rounded-b-3xl mb-8 flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-black tracking-tighter">JOBBOX</h1>
+          <p className="text-sm text-blue-400 font-semibold tracking-wide mt-1 uppercase">Field Portal</p>
+        </div>
+        <button onClick={handleLogout} className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors mb-1">
+          Logout
+        </button>
+      </header>
+      
+      <div className="w-full max-w-sm mx-auto px-6">
+        {/* Upload Grid */}
+        <div className="flex flex-col gap-4 mb-10">
+          <ActionButton label="Warranty" tag="warranty" onClick={upload} loading={loading} color="border-emerald-500" />
+          <ActionButton label="Permit" tag="permit" onClick={upload} loading={loading} color="border-amber-500" />
+          <ActionButton label="Invoice" tag="invoice" onClick={upload} loading={loading} color="border-blue-500" />
         </div>
 
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Recent Activity</h2>
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Activity Feed */}
+        <div className="flex items-center justify-between mb-4 px-1">
+          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Recent Activity</h2>
+          <span className="text-xs font-bold text-slate-400 bg-slate-200 px-2 py-1 rounded-full">{docs.length}</span>
+        </div>
+        
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {docs.length > 0 ? docs.map((doc, i) => (
-            <div key={i} className="flex items-center justify-between p-4 border-b border-gray-100 last:border-0">
-              <span className="font-semibold text-sm text-gray-800">{doc.tag.charAt(0).toUpperCase() + doc.tag.slice(1)}</span>
-              <span className="text-xs text-gray-400 font-medium">{new Date(doc.created_at).toLocaleDateString()}</span>
+            <div key={i} className="flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+              <span className="font-bold text-sm text-slate-800 tracking-tight">{doc.tag.toUpperCase()}</span>
+              <span className="text-xs text-slate-400 font-semibold">{new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
             </div>
-          )) : <p className="p-4 text-sm text-gray-400">No records found.</p>}
+          )) : (
+            <div className="p-8 text-center text-sm font-medium text-slate-400">
+              No records found. Take a photo to start.
+            </div>
+          )}
         </div>
       </div>
     </main>
   );
 }
 
-function ActionButton({ label, tag, onClick, loading }: { label: string, tag: string, onClick: (t: string) => void, loading: string | null }) {
+function ActionButton({ label, tag, onClick, loading, color }: { label: string, tag: string, onClick: (t: string) => void, loading: string | null, color: string }) {
   return (
     <button 
       disabled={!!loading}
       onClick={() => onClick(tag)}
-      className={`w-full py-4 px-6 rounded-xl text-left font-semibold transition-all duration-200 border border-gray-200 
-        ${loading === tag ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-900 hover:border-blue-500 hover:shadow-md active:scale-[0.98]'}`}
+      className={`group relative w-full p-5 rounded-2xl text-left transition-all duration-200 overflow-hidden outline-none
+        ${loading === tag 
+          ? 'bg-slate-200 border-2 border-slate-300 text-slate-400 cursor-not-allowed' 
+          : `bg-white border-2 border-slate-200 text-slate-900 shadow-sm hover:shadow-md hover:border-slate-300 active:scale-[0.98]`
+        }`}
     >
-      {loading === tag ? 'Uploading...' : label}
+      {/* Colored accent bar on the left for visual anchoring */}
+      {!loading && <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.replace('border-', 'bg-')} opacity-80 group-hover:opacity-100 transition-opacity`} />}
+      
+      <div className={`flex items-center justify-between font-black tracking-tight text-lg ${!loading ? 'pl-2' : ''}`}>
+        {loading === tag ? 'UPLOADING...' : label.toUpperCase()}
+        {!loading && (
+          <svg className="w-5 h-5 text-slate-300 group-hover:text-slate-900 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        )}
+      </div>
     </button>
   );
 }
