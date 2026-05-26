@@ -18,7 +18,7 @@ export default function Home() {
       setAuthChecking(false);
     });
 
-    // Listen for auth changes (like when they click the magic link)
+    // Listen for auth changes
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
     });
@@ -71,11 +71,27 @@ export default function Home() {
 
       if (data) {
         await sb.from('documents').insert({ file_path: data.path, tag, user_id: user.id });
-        setDocs((prev) => [{ created_at: new Date(), tag }, ...prev]);
+        setDocs((prev) => [{ created_at: new Date(), tag, file_path: data.path }, ...prev]);
       }
       setLoading(null);
     };
     input.click();
+  };
+
+  const openDoc = async (filePath: string) => {
+    if (!filePath) return;
+    
+    // Generate a secure, 60-second temporary link to bypass the locked bucket
+    const { data, error } = await sb.storage.from('docs').createSignedUrl(filePath, 60);
+    
+    if (error) {
+      alert("Error opening file: " + error.message);
+      return;
+    }
+    
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank');
+    }
   };
 
   if (authChecking) {
@@ -142,10 +158,21 @@ export default function Home() {
         
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {docs.length > 0 ? docs.map((doc, i) => (
-            <div key={i} className="flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-              <span className="font-bold text-sm text-slate-800 tracking-tight">{doc.tag.toUpperCase()}</span>
-              <span className="text-xs text-slate-400 font-semibold">{new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-            </div>
+            <button 
+              key={i} 
+              onClick={() => openDoc(doc.file_path)}
+              className="w-full flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors text-left group"
+            >
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="font-bold text-sm text-slate-800 tracking-tight">{doc.tag.toUpperCase()}</span>
+              </div>
+              <span className="text-xs text-slate-400 font-semibold">
+                {new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </button>
           )) : (
             <div className="p-8 text-center text-sm font-medium text-slate-400">
               No records found. Take a photo to start.
@@ -168,7 +195,6 @@ function ActionButton({ label, tag, onClick, loading, color }: { label: string, 
           : `bg-white border-2 border-slate-200 text-slate-900 shadow-sm hover:shadow-md hover:border-slate-300 active:scale-[0.98]`
         }`}
     >
-      {/* Colored accent bar on the left for visual anchoring */}
       {!loading && <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${color.replace('border-', 'bg-')} opacity-80 group-hover:opacity-100 transition-opacity`} />}
       
       <div className={`flex items-center justify-between font-black tracking-tight text-lg ${!loading ? 'pl-2' : ''}`}>
