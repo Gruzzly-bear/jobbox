@@ -128,18 +128,20 @@ export default function Home() {
   // MAIN DASHBOARD UI
   return (
     <main className="min-h-screen bg-slate-100 font-sans selection:bg-blue-500 selection:text-white pb-12">
-      <header className="bg-slate-900 text-white px-6 pt-12 pb-8 shadow-md rounded-b-3xl mb-8 flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-black tracking-tighter">JOBBOX</h1>
-          <p className="text-sm text-blue-400 font-semibold tracking-wide mt-1 uppercase">Field Portal</p>
+      <header className="bg-slate-900 text-white px-6 pt-12 pb-8 shadow-md rounded-b-3xl mb-8">
+        <div className="max-w-xl mx-auto flex justify-between items-end">
+          <div>
+            <h1 className="text-3xl font-black tracking-tighter">JOBBOX</h1>
+            <p className="text-sm text-blue-400 font-semibold tracking-wide mt-1 uppercase">Field Portal</p>
+          </div>
+          <button onClick={handleLogout} className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors mb-1">
+            Logout
+          </button>
         </div>
-        <button onClick={handleLogout} className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors mb-1">
-          Logout
-        </button>
       </header>
       
-      <div className="w-full max-w-sm mx-auto px-6">
-        <div className="flex flex-col gap-4 mb-10">
+      <div className="w-full max-w-xl mx-auto px-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
           <ActionButton label="Warranty" tag="warranty" onClick={upload} loading={loading} color="border-emerald-500" />
           <ActionButton label="Permit" tag="permit" onClick={upload} loading={loading} color="border-amber-500" />
           <ActionButton label="Invoice" tag="invoice" onClick={upload} loading={loading} color="border-blue-500" />
@@ -158,8 +160,15 @@ export default function Home() {
                 <span className="font-bold text-sm text-slate-800 tracking-tight">{doc.tag.toUpperCase()}</span>
               </button>
               
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-semibold">{new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-400 font-semibold mr-2">{new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                
+                {/* Download Button */}
+                <a href={sb.storage.from('docs').getPublicUrl(doc.file_path).data.publicUrl} download target="_blank" className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </a>
+                
+                {/* Delete Button */}
                 <button onClick={() => deleteDoc(doc.id, doc.file_path)} className="p-2 text-slate-400 hover:text-red-600 transition-colors">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
