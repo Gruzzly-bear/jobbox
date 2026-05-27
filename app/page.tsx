@@ -18,7 +18,6 @@ export default function Home() {
       setAuthChecking(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
     });
@@ -56,8 +55,7 @@ export default function Home() {
     
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
-      if (!file) return;
-      if (!user) return;
+      if (!file || !user) return;
 
       setLoading(tag);
       const filePath = `${user.id}/${Date.now()}_${file.name}`;
@@ -70,8 +68,8 @@ export default function Home() {
       }
 
       if (data) {
-        await sb.from('documents').insert({ file_path: data.path, tag, user_id: user.id });
-        setDocs((prev) => [{ created_at: new Date(), tag, file_path: data.path }, ...prev]);
+        const { data: newDoc } = await sb.from('documents').insert({ file_path: data.path, tag, user_id: user.id }).select().single();
+        if (newDoc) setDocs((prev) => [newDoc, ...prev]);
       }
       setLoading(null);
     };
@@ -80,18 +78,17 @@ export default function Home() {
 
   const openDoc = async (filePath: string) => {
     if (!filePath) return;
-    
-    // Generate a secure, 60-second temporary link to bypass the locked bucket
     const { data, error } = await sb.storage.from('docs').createSignedUrl(filePath, 60);
-    
-    if (error) {
-      alert("Error opening file: " + error.message);
-      return;
-    }
-    
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, '_blank');
-    }
+    if (error) return alert("Error opening file: " + error.message);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  };
+
+  const deleteDoc = async (id: string, filePath: string) => {
+    if (!confirm("Are you sure you want to delete this?")) return;
+    const { error: storageError } = await sb.storage.from('docs').remove([filePath]);
+    if (storageError) return alert("Storage delete failed: " + storageError.message);
+    await sb.from('documents').delete().eq('id', id);
+    setDocs(docs.filter(d => d.id !== id));
   };
 
   if (authChecking) {
@@ -131,7 +128,6 @@ export default function Home() {
   // MAIN DASHBOARD UI
   return (
     <main className="min-h-screen bg-slate-100 font-sans selection:bg-blue-500 selection:text-white pb-12">
-      {/* Dark Header */}
       <header className="bg-slate-900 text-white px-6 pt-12 pb-8 shadow-md rounded-b-3xl mb-8 flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-black tracking-tighter">JOBBOX</h1>
@@ -143,40 +139,34 @@ export default function Home() {
       </header>
       
       <div className="w-full max-w-sm mx-auto px-6">
-        {/* Upload Grid */}
         <div className="flex flex-col gap-4 mb-10">
           <ActionButton label="Warranty" tag="warranty" onClick={upload} loading={loading} color="border-emerald-500" />
           <ActionButton label="Permit" tag="permit" onClick={upload} loading={loading} color="border-amber-500" />
           <ActionButton label="Invoice" tag="invoice" onClick={upload} loading={loading} color="border-blue-500" />
         </div>
 
-        {/* Activity Feed */}
         <div className="flex items-center justify-between mb-4 px-1">
           <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Recent Activity</h2>
           <span className="text-xs font-bold text-slate-400 bg-slate-200 px-2 py-1 rounded-full">{docs.length}</span>
         </div>
         
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          {docs.length > 0 ? docs.map((doc, i) => (
-            <button 
-              key={i} 
-              onClick={() => openDoc(doc.file_path)}
-              className="w-full flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <svg className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
+          {docs.length > 0 ? docs.map((doc) => (
+            <div key={doc.id} className="flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+              <button onClick={() => openDoc(doc.file_path)} className="flex items-center gap-3 flex-1 text-left">
+                <svg className="w-4 h-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                 <span className="font-bold text-sm text-slate-800 tracking-tight">{doc.tag.toUpperCase()}</span>
+              </button>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-semibold">{new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                <button onClick={() => deleteDoc(doc.id, doc.file_path)} className="p-2 text-slate-400 hover:text-red-600 transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
               </div>
-              <span className="text-xs text-slate-400 font-semibold">
-                {new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-              </span>
-            </button>
-          )) : (
-            <div className="p-8 text-center text-sm font-medium text-slate-400">
-              No records found. Take a photo to start.
             </div>
+          )) : (
+            <div className="p-8 text-center text-sm font-medium text-slate-400">No records found.</div>
           )}
         </div>
       </div>
