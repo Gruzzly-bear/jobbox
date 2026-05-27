@@ -83,18 +83,30 @@ export default function Home() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
-const deleteDoc = async (id: string, filePath: string) => {
-    if (!confirm("Are you sure you want to delete this?")) return;
+  const downloadDoc = async (filePath: string, tag: string) => {
+    const { data, error } = await sb.storage.from('docs').download(filePath);
+    if (error) return alert("Download failed: " + error.message);
+    
+    const url = URL.createObjectURL(data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${tag.toUpperCase()}_${new Date().toLocaleDateString().replace(/\//g, '-')}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    
+    URL.revokeObjectURL(url);
+    a.remove();
+  };
 
-    // 1. Delete from storage
+  const deleteDoc = async (id: string, filePath: string) => {
+    if (!confirm("Are you sure you want to delete this?")) return;
+    
     const { error: storageError } = await sb.storage.from('docs').remove([filePath]);
     if (storageError) return alert("Storage delete failed: " + storageError.message);
-
-    // 2. Delete from database
+    
     const { error: dbError } = await sb.from('documents').delete().eq('id', id);
     if (dbError) return alert("DB delete failed: " + dbError.message);
-
-    // 3. Force state update so it disappears immediately
+    
     setDocs((prevDocs) => prevDocs.filter((doc) => doc.id !== id));
   };
 
@@ -162,21 +174,21 @@ const deleteDoc = async (id: string, filePath: string) => {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {docs.length > 0 ? docs.map((doc) => (
             <div key={doc.id} className="flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-              <button onClick={() => openDoc(doc.file_path)} className="flex items-center gap-3 flex-1 text-left">
-                <svg className="w-4 h-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+              <button onClick={() => openDoc(doc.file_path)} className="flex items-center gap-3 flex-1 text-left group">
+                <svg className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                 <span className="font-bold text-sm text-slate-800 tracking-tight">{doc.tag.toUpperCase()}</span>
               </button>
               
               <div className="flex items-center gap-1">
-                <span className="text-xs text-slate-400 font-semibold mr-2">{new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                <span className="text-xs text-slate-400 font-semibold mr-2 hidden sm:block">{new Date(doc.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                 
                 {/* Download Button */}
-                <a href={sb.storage.from('docs').getPublicUrl(doc.file_path).data.publicUrl} download target="_blank" className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
+                <button onClick={() => downloadDoc(doc.file_path, doc.tag)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors" title="Download">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                </a>
+                </button>
                 
                 {/* Delete Button */}
-                <button onClick={() => deleteDoc(doc.id, doc.file_path)} className="p-2 text-slate-400 hover:text-red-600 transition-colors">
+                <button onClick={() => deleteDoc(doc.id, doc.file_path)} className="p-2 text-slate-400 hover:text-red-600 transition-colors" title="Delete">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
               </div>
