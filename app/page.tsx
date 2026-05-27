@@ -83,12 +83,19 @@ export default function Home() {
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
-  const deleteDoc = async (id: string, filePath: string) => {
+const deleteDoc = async (id: string, filePath: string) => {
     if (!confirm("Are you sure you want to delete this?")) return;
+
+    // 1. Delete from storage
     const { error: storageError } = await sb.storage.from('docs').remove([filePath]);
     if (storageError) return alert("Storage delete failed: " + storageError.message);
-    await sb.from('documents').delete().eq('id', id);
-    setDocs(docs.filter(d => d.id !== id));
+
+    // 2. Delete from database
+    const { error: dbError } = await sb.from('documents').delete().eq('id', id);
+    if (dbError) return alert("DB delete failed: " + dbError.message);
+
+    // 3. Force state update so it disappears immediately
+    setDocs((prevDocs) => prevDocs.filter((doc) => doc.id !== id));
   };
 
   if (authChecking) {
