@@ -156,10 +156,12 @@ export default function Home() {
       </header>
       
       <div className="w-full max-w-xl mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        {/* Changed to a 2x2 grid to fit 4 buttons and stop the text from getting crushed */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
           <ActionButton label="Warranty" tag="warranty" onClick={upload} loading={loading} color="border-emerald-500" />
           <ActionButton label="Permit" tag="permit" onClick={upload} loading={loading} color="border-amber-500" />
           <ActionButton label="Invoice" tag="invoice" onClick={upload} loading={loading} color="border-blue-500" />
+          <ActionButton label="Receipt" tag="receipt" onClick={upload} loading={loading} color="border-purple-500" />
         </div>
 
         <div className="flex items-center justify-between mb-4 px-1">
