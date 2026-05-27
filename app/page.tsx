@@ -57,16 +57,29 @@ export default function Home() {
 
       setLoading(tag);
       const filePath = `${user.id}/${Date.now()}_${file.name}`;
+      
+      // 1. Upload to Storage
       const { data, error } = await sb.storage.from('docs').upload(filePath, file);
       
       if (error) {
-        alert(`Upload failed: ${error.message}`);
+        alert(`Storage Upload failed: ${error.message}`);
         setLoading(null);
         return;
       }
 
+      // 2. Insert into Database
       if (data) {
-        const { data: newDoc } = await sb.from('documents').insert({ file_path: data.path, tag, user_id: user.id }).select().single();
+        const { data: newDoc, error: dbError } = await sb.from('documents')
+          .insert({ file_path: data.path, tag, user_id: user.id })
+          .select()
+          .single();
+          
+        if (dbError) {
+          alert(`Database rejected it: ${dbError.message}`);
+          setLoading(null);
+          return;
+        }
+
         if (newDoc) setDocs((prev) => [newDoc, ...prev]);
       }
       setLoading(null);
